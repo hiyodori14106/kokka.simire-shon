@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Borderline Strategy - Ultimate Online Nation</title>
+<script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+<style>
+ :root { --primary: #00f3ff; --danger: #ff0055; --success: #00ff99; --gold: #ffcc00; --bg: #050a10; --panel: rgba(10, 20, 30, 0.9); }
+ body { margin: 0; overflow: hidden; background: var(--bg); font-family: 'Noto Sans JP', sans-serif; color: #e0e0e0; touch-action: none; }
+ canvas { display: block; cursor: crosshair; }
+
+ /* UI Layout */
+ #sidebar { position: fixed; top: 0; left: 0; width: 320px; height: 100vh; background: var(--panel); border-right: 1px solid rgba(0, 243, 255, 0.3); z-index: 100; overflow-y: auto; padding: 20px; box-sizing: border-box; backdrop-filter: blur(10px); }
+ #chat-panel { position: fixed; bottom: 0; right: 0; width: 300px; height: 300px; background: var(--panel); border-top: 1px solid rgba(0, 243, 255, 0.3); border-left: 1px solid rgba(0, 243, 255, 0.3); z-index: 100; display: flex; flex-direction: column; }
+
+ /* Elements */
+ h1 { font-family: 'Orbitron'; font-size: 1.2em; color: var(--primary); margin: 0 0 20px; text-align: center; border-bottom: 2px solid var(--primary); padding-bottom: 10px; }
+ .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+ .stat-card { background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
+ .stat-label { font-size: 0.7em; color: #aaa; display: block; }
+ .stat-val { font-family: 'Orbitron'; font-size: 1.1em; color: #fff; }
+
+ button { width: 100%; padding: 12px; margin-bottom: 8px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; background: #333; color: white; }
+ button:hover { filter: brightness(1.2); }
+ .btn-main { background: var(--primary); color: #000; }
+ .btn-war { background: var(--danger); color: white; }
+ .btn-eco { background: var(--success); color: #000; }
+
+ .tabs { display: flex; gap: 5px; margin-bottom: 15px; }
+ .tab { flex: 1; padding: 8px; font-size: 0.8em; text-align: center; cursor: pointer; background: rgba(255,255,255,0.1); border-radius: 4px; }
+ .tab.active { background: var(--primary); color: #000; }
+
+ #messages { flex: 1; overflow-y: auto; padding: 10px; font-size: 0.85em; }
+ #chat-input { background: rgba(0,0,0,0.5); border: none; padding: 10px; color: white; outline: none; }
+
+ .hidden { display: none; }
+ .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; display: flex; justify-content: center; align-items: center; }
+ .modal { background: #111; padding: 40px; border-radius: 12px; border: 2px solid var(--primary); width: 350px; text-align: center; }
+ 
+ /* Map Tooltip */
+ #map-tooltip { position: fixed; pointer-events: none; background: rgba(0,0,0,0.8); padding: 5px 10px; border-radius: 4px; font-size: 12px; z-index: 200; border: 1px solid var(--primary); display: none; }
+</style>
+</head>
+<body>
+
+<div id="map-tooltip"></div>
+
+<div id="start-overlay" class="overlay">
+ <div class="modal">
+  <h1>BORDERLINE STRATEGY</h1>
+  <input type="text" id="init-name" placeholder="国家名" style="width:100%; padding:10px; margin-bottom:10px; box-sizing:border-box;">
+  <input type="color" id="init-color" value="#00f3ff" style="width:100%; height:40px; margin-bottom:20px; border:none; background:none;">
+  <button class="btn-main" onclick="startGame()">建国 / 入国</button>
+ </div>
+</div>
+
+<div id="sidebar" class="hidden">
+ <h1>STRATEGY HUB</h1>
+ 
+ <div class="stat-grid">
+  <div class="stat-card"><span class="stat-label">資金</span><span class="stat-val" id="ui-money">0</span></div>
+  <div class="stat-card"><span class="stat-label">人口</span><span class="stat-val" id="ui-pop">0</span></div>
+  <div class="stat-card"><span class="stat-label">領土</span><span class="stat-val" id="ui-area">0</span></div>
+  <div class="stat-card"><span class="stat-label">幸福度</span><span class="stat-val" id="ui-happy">100</span>%</div>
+ </div>
+
+ <div class="tabs">
+  <div class="tab active" onclick="setTab('eco')">内政</div>
+  <div class="tab" onclick="setTab('mil')">軍事</div>
+  <div class="tab" onclick="setTab('dip')">外交</div>
+ </div>
+
+ <div id="tab-eco">
+  <div style="font-size:0.8em; margin-bottom:10px; color:var(--success);">所得税率: <span id="tax-val">10</span>%</div>
+  <input type="range" id="tax-slider" min="0" max="80" value="10" style="width:100%;" oninput="document.getElementById('tax-val').innerText=this.value">
+  <button class="btn-eco" onclick="invest()">🏭 産業投資 (-5000)</button>
+  <button onclick="distributeWealth()">🎁 給付金配布 (-10000/幸↑)</button>
+ </div>
+
+ <div id="tab-mil" class="hidden">
+  <div style="font-size:0.8em; margin-bottom:10px; color:var(--danger);">総兵力: <span id="ui-military">0</span></div>
+  <button class="btn-war" onclick="recruit()">⚔️ 兵員雇用 (-1000/人↓)</button>
+  <button class="btn-war" style="background:#500" onclick="draft()">📢 強制徴兵 (無料/幸↓↓)</button>
+  <p style="font-size:0.7em; color:#888;">※敵の領土を上書きするには兵力が必要です。</p>
+ </div>
+
+ <div id="tab-dip" class="hidden">
+  <h3>国家ランキング</h3>
+  <div id="ranking-list" style="font-size:0.85em;"></div>
+ </div>
+
+ <div style="margin-top:30px; border-top:1px solid #333; padding-top:20px;">
+  <button onclick="saveToPantry()" style="font-size:0.8em;">💾 サーバー保存</button>
+  <button onclick="location.reload()" style="background:#555; font-size:0.8em;">🚪 ログアウト</button>
+ </div>
+</div>
+
+<div id="chat-panel" class="hidden">
+ <div id="messages"></div>
+ <input type="text" id="chat-input" placeholder="メッセージ...">
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+// --- 1. 定数・初期設定 ---
+const PANTRY_ID = "6fafdf00-0e50-4e44-a7ee-21e3a266898c";
+const PANTRY_URL = `https://getpantry.cloud/apiv1/pantry/${PANTRY_ID}/basket/borderline_strategy`;
+
+const gun = Gun({ peers: ['https://gun-manhattan.herokuapp.com/gun', 'https://peer.wallie.io/gun'] });
+const db = gun.get('borderline_strat_v1');
+const pixelDB = db.get('pixels');
+const nationDB = db.get('nations');
+const chatDB = db.get('chat');
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d', { alpha: false });
+
+let myId = localStorage.getItem('bs_userId') || Math.random().toString(36).slice(2);
+localStorage.setItem('bs_userId', myId);
+
+let nation = {
+ name: "", color: "#00f3ff", money: 50000, pop: 10000, 
+ happiness: 100, military: 100, area: 0, gdp: 1000, lastUpdate: Date.now()
+};
+
+let worldPixels = {}; // "x_y": ownerId
+let nationInfo = {}; // id: {name, color}
+let camX=0, camY=0, zoom=20;
+let isPainting=false, isDragging=false, lastMouse={x:0,y:0};
+
+// --- 2. 起動・同期 ---
+async function startGame() {
+ nation.name = document.getElementById('init-name').value || "無名国家";
+ nation.color = document.getElementById('init-color').value;
+ 
+ document.getElementById('start-overlay').classList.add('hidden');
+ document.getElementById('sidebar').classList.remove('hidden');
+ document.getElementById('chat-panel').classList.remove('hidden');
+
+ // Pantryから既存データを読み込み
+ await loadFromPantry();
+ 
+ // Gun.js 同期開始
+ pixelDB.map().on((ownerId, pos) => { if(ownerId) worldPixels[pos] = ownerId; });
+ nationDB.map().on((data, id) => { if(data) nationInfo[id] = data; });
+ chatDB.map().on((d, i) => { if(d && Date.now()-i < 3600000) addChatMessage(d.n, d.t, d.c); });
+
+ // 自分の情報を登録
+ nationDB.get(myId).put({name: nation.name, color: nation.color});
+ 
+ setInterval(economyTick, 5000);
+ setInterval(saveToPantry, 60000);
+ render();
+}
+
+// --- 3. 経済システム ---
+function economyTick() {
+ const tax = parseInt(document.getElementById('tax-slider').value);
+ 
+ // 収入: GDP * 税率 + 領土ボーナス
+ const income = (nation.gdp * (tax/100)) + (nation.area * 5);
+ nation.money += income;
+ 
+ // 維持費: 兵力数
+ const upkeep = nation.military * 2;
+ nation.money -= upkeep;
+
+ // 幸福度変化
+ if(tax > 30) nation.happiness -= 1;
+ if(tax < 10) nation.happiness += 1;
+ if(nation.money < 0) { nation.money = 0; nation.happiness -= 5; nation.military = Math.max(0, nation.military - 10); }
+
+ // 人口変化
+ if(nation.happiness > 70) nation.pop += Math.floor(nation.pop * 0.01);
+ if(nation.happiness < 30) nation.pop -= Math.floor(nation.pop * 0.01);
+
+ nation.happiness = Math.min(100, Math.max(0, nation.happiness));
+ nation.area = Object.values(worldPixels).filter(id => id === myId).length;
+ 
+ updateUI();
+ // 定期的に自分のステータスをGunへ（他国がランキングで見れるように）
+ nationDB.get(myId).put({name: nation.name, color: nation.color, area: nation.area, gdp: nation.gdp});
+}
+
+function invest() {
+ if(nation.money >= 5000) { nation.money -= 5000; nation.gdp += 1000; updateUI(); }
+}
+
+function distributeWealth() {
+ if(nation.money >= 10000) { nation.money -= 10000; nation.happiness = Math.min(100, nation.happiness + 20); updateUI(); }
+}
+
+function recruit() {
+ if(nation.money >= 1000 && nation.pop >= 100) { nation.money -= 100; nation.pop -= 100; nation.military += 100; updateUI(); }
+}
+
+function draft() {
+ if(nation.pop >= 500) { nation.pop -= 500; nation.military += 400; nation.happiness -= 30; updateUI(); }
+}
+
+// --- 4. 描画・操作 ---
+function toScreen(wx, wy) {
+ return { x: (wx-camX)*zoom + canvas.width/2, y: (wy-camY)*zoom + canvas.height/2 };
+}
+
+function toWorld(sx, sy) {
+ return { wx: Math.floor((sx-canvas.width/2)/zoom + camX), wy: Math.floor((sy-canvas.height/2)/zoom + camY) };
+}
+
+function render() {
+ canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+ ctx.fillStyle = '#050a10'; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+ const sW = toWorld(0,0); const eW = toWorld(canvas.width, canvas.height);
+
+ // グリッド
+ if(zoom > 10) {
+  ctx.beginPath(); ctx.strokeStyle = "rgba(0, 243, 255, 0.05)";
+  for(let x=sW.wx; x<=eW.wx; x++) { let p = toScreen(x,0); ctx.moveTo(p.x, 0); ctx.lineTo(p.x, canvas.height); }
+  for(let y=sW.wy; y<=eW.wy; y++) { let p = toScreen(0,y); ctx.moveTo(0, p.y); ctx.lineTo(canvas.width, p.y); }
+  ctx.stroke();
+ }
+
+ // 領土
+ for(let pos in worldPixels) {
+  const [wx, wy] = pos.split('_').map(Number);
+  if(wx < sW.wx || wx > eW.wx || wy < sW.wy || wy > eW.wy) continue;
+  
+  const ownerId = worldPixels[pos];
+  const info = nationInfo[ownerId];
+  if(!info) continue;
+
+  const s = toScreen(wx, wy);
+  ctx.fillStyle = info.color;
+  ctx.fillRect(s.x, s.y, Math.ceil(zoom), Math.ceil(zoom));
+ }
+
+ requestAnimationFrame(render);
+}
+
+// 領土獲得ロジック
+function claimPixel(wx, wy) {
+ const key = wx + "_" + wy;
+ const currentOwner = worldPixels[key];
+
+ // 自分の領土なら何もしない
+ if(currentOwner === myId) return;
+
+ // 拡張コスト
+ let cost = 10;
+ if(currentOwner) {
+  // 他国領土への攻撃コスト（兵力が必要）
+  if(nation.military < 10) return;
+  nation.military -= 2;
+  cost = 50; 
+ }
+
+ if(nation.money >= cost) {
+  nation.money -= cost;
+  worldPixels[key] = myId;
+  pixelDB.get(key).put(myId);
+  updateUI();
+ }
+}
+
+// --- 5. 入力 ---
+canvas.onmousedown = (e) => {
+ if(e.button === 0) isPainting = true;
+ else { isDragging = true; lastMouse = {x: e.clientX, y: e.clientY}; }
+ const w = toWorld(e.clientX, e.clientY);
+ if(isPainting) claimPixel(w.wx, w.wy);
+};
+
+window.onmousemove = (e) => {
+ const w = toWorld(e.clientX, e.clientY);
+ const tooltip = document.getElementById('map-tooltip');
+ const ownerId = worldPixels[w.wx + "_" + w.wy];
+ if(ownerId) {
+  tooltip.style.display = 'block'; tooltip.style.left = (e.clientX+15)+'px'; tooltip.style.top = (e.clientY+15)+'px';
+  tooltip.innerText = (nationInfo[ownerId]?.name || "不明") + " の領土";
+ } else { tooltip.style.display = 'none'; }
+
+ if(isPainting) claimPixel(w.wx, w.wy);
+ if(isDragging) {
+  camX -= (e.clientX - lastMouse.x) / zoom;
+  camY -= (e.clientY - lastMouse.y) / zoom;
+  lastMouse = {x: e.clientX, y: e.clientY};
+ }
+};
+
+window.onmouseup = () => { isPainting = false; isDragging = false; };
+canvas.onwheel = (e) => { e.preventDefault(); zoom = Math.min(Math.max(zoom * (e.deltaY > 0 ? 0.9 : 1.1), 2), 100); };
+
+// --- 6. ユーティリティ ---
+function setTab(t) {
+ ['eco','mil','dip'].forEach(id => document.getElementById('tab-'+id).classList.add('hidden'));
+ document.getElementById('tab-'+t).classList.remove('hidden');
+ document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+ event.target.classList.add('active');
+ if(t === 'dip') refreshRanking();
+}
+
+function updateUI() {
+ document.getElementById('ui-money').innerText = Math.floor(nation.money).toLocaleString();
+ document.getElementById('ui-pop').innerText = Math.floor(nation.pop).toLocaleString();
+ document.getElementById('ui-area').innerText = nation.area.toLocaleString();
+ document.getElementById('ui-happy').innerText = nation.happiness;
+ document.getElementById('ui-military').innerText = nation.military.toLocaleString();
+}
+
+function addChatMessage(n, t, c) {
+ const m = document.getElementById('messages');
+ const div = document.createElement('div');
+ div.innerHTML = `<b style="color:${c}">${n}</b>: ${t}`;
+ m.appendChild(div); m.scrollTop = m.scrollHeight;
+}
+
+document.getElementById('chat-input').onkeypress = (e) => {
+ if(e.key === 'Enter' && e.target.value) {
+  chatDB.get(Date.now()).put({n: nation.name, t: e.target.value, c: nation.color});
+  e.target.value = "";
+ }
+};
+
+function refreshRanking() {
+ const list = document.getElementById('ranking-list');
+ const sorted = Object.values(nationInfo).sort((a,b) => (b.area||0) - (a.area||0));
+ list.innerHTML = sorted.slice(0, 10).map((n, i) => `<div>${i+1}. ${n.name} (${n.area||0}px)</div>`).join('');
+}
+
+// --- 7. Pantryバックアップ ---
+async function saveToPantry() {
+ try {
+  await fetch(PANTRY_URL, {
+   method: 'POST',
+   headers: {'Content-Type': 'application/json'},
+   body: JSON.stringify({ pixels: worldPixels, nations: nationInfo, time: Date.now() })
+  });
+  console.log("Backup Saved to Pantry");
+ } catch(e) {}
+}
+
+async function loadFromPantry() {
+ try {
+  const res = await fetch(PANTRY_URL);
+  if(!res.ok) return;
+  const data = await res.json();
+  if(data.pixels) worldPixels = data.pixels;
+  if(data.nations) nationInfo = data.nations;
+ } catch(e) {}
+}
+
+</script>
+</body>
+</html>
