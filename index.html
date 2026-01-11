@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <title>Global Strategy: Absolute Final Fix</title>
+ <title>Global Strategy: Realtime Online</title>
   
  <!-- Fonts -->
  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Noto+Sans+JP:wght@300;400;700&display=swap" rel="stylesheet">
@@ -15,6 +15,8 @@
  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
  <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
  <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+ <!-- Gun.js Realtime Library -->
+ <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
 
 <style>
  :root { --bg-color: #050505; --panel-bg: rgba(15, 20, 25, 0.95); --neon-blue: #00f3ff; --neon-red: #ff0055; --neon-green: #00ff99; --neon-gold: #ffcc00; --neon-purple: #bd00ff; }
@@ -65,9 +67,9 @@
 
 <div id="overlayStart" class="overlay"> 
  <div id="menuMain" class="modal">  
- <h1>Global Strategy</h1>  
- <p style="color:#aaa;">領土争奪・国家運営シミュレーション</p>  
- <div id="loadingMsg" style="color:var(--neon-green); margin-bottom:10px; display:none;">自動ログイン中...</div>  
+ <h1>Global Strategy <span style="font-size: 0.5em; vertical-align: middle; color:var(--neon-green)">ONLINE</span></h1>  
+ <p style="color:#aaa;">Gun.js P2P リアルタイム同期モード</p>  
+ <div id="loadingMsg" style="color:var(--neon-green); margin-bottom:10px; display:none;">接続中...</div>  
  <button class="btn-main" onclick="showScreen('Register')">🌍 新規建国</button>  
  <button class="btn-buy" onclick="showScreen('Login')">🔑 ログイン</button>  
  <button class="btn-sub" onclick="startSpectator()">👁️ 観戦モード</button> 
@@ -76,7 +78,7 @@
  <h2>新規建国</h2> 
  <input type="text" id="regName" placeholder="国名"> 
  <input type="password" id="regPass" placeholder="パスワード"> 
- <input type="text" id="regCurrency" placeholder="通貨単位 (例: 円, Dollar)"> 
+ <input type="text" id="regCurrency" placeholder="通貨単位 (例: 円)"> 
  <button id="btnRegSubmit" class="btn-main" onclick="register()">作成</button> 
  <button class="btn-sub" onclick="showScreen('Main')">戻る</button> 
  </div>
@@ -104,7 +106,7 @@
  <button class="btn-sub" style="width:100px;" onclick="closeAdmin()">閉じる</button> 
  <button class="btn-main" style="width:150px;" onclick="refreshAdminList()">リスト更新</button> 
  </div> 
- <table><thead><tr><th>国名</th><th>資金</th><th>幸福</th><th>人口</th><th>面積</th><th>GDP</th><th>操作</th></tr></thead><tbody id="adminTableBody"></tbody></table> 
+ <table><thead><tr><th>国名</th><th>資金</th><th>幸福</th><th>人口</th><th>面積</th><th>操作</th></tr></thead><tbody id="adminTableBody"></tbody></table> 
 </div>
 
 <div id="gameUI" class="app-container hidden"> 
@@ -149,7 +151,7 @@
       <button class="btn-trade" id="btnSendMoney" onclick="sendMoney()" disabled>💸 送金</button>
       <button class="btn-trade" id="btnCedeLand" onclick="startTransferGeo()" disabled>🗺️ 領土譲渡</button>
     </div>
-    <button class="btn-dm" id="btnDM" onclick="sendDM()" disabled>📩 密書送信 (履歴なし)</button>
+    <button class="btn-dm" id="btnDM" onclick="sendDM()" disabled>📩 密書送信</button>
     <button class="btn-buy" id="btnAlly" onclick="actionAlly()" disabled>🤝 同盟申請</button> 
     <button class="btn-war" id="btnWar" onclick="actionWar()" disabled>💣 宣戦布告</button> 
   </div>
@@ -158,7 +160,7 @@
   
  <div id="spectatorMsg" class="hidden" style="padding:20px; text-align:center; color:var(--neon-green);">
    <h3>👁️ 観戦モード中</h3>
-   <p>操作はできません。<br>世界情勢を観察しています。</p>
+   <p>リアルタイムで世界情勢を監視しています。</p>
    <button class="btn-sub" onclick="location.reload()">トップへ戻る</button>
  </div>
   
@@ -171,18 +173,25 @@
  </div>
 </div>
 
-<div id="debugLog">System Initialized.</div>
+<div id="debugLog">Gun.js Initializing...</div>
 
 <script>
- // --- Constants ---
- const PANTRY_ID = "5355906c-0f7f-4e97-9c05-65490bfe8f59";
- const BASKET_NAME = "strategy_complete_final";
- const API_URL = "https://getpantry.cloud/apiv1/pantry/" + PANTRY_ID + "/basket/" + BASKET_NAME;
+ // --- Config ---
+ const PANTRY_ID = "6fafdf00-0e50-4e44-a7ee-21e3a266898c";
+ const BASKET_NAME = "strategy_online_v1";
+ const PANTRY_URL = "https://getpantry.cloud/apiv1/pantry/" + PANTRY_ID + "/basket/" + BASKET_NAME;
+ 
+ // --- Gun.js Initialization ---
+ const gun = Gun([
+   'https://gun-manhattan.herokuapp.com/gun',
+   'https://peer.wall.org/gun'
+ ]);
+ const worldNode = gun.get('global-strategy-v1').get('nations');
 
  // --- Globals ---
  let myName = "", myData = {}, map, drawnItems, drawControl, selectedTarget = null;
- let expansionMode = false, transferMode = false, isSyncing = false, isSpectator = false;
- let lastWorldDataStr = "";
+ let expansionMode = false, transferMode = false, isSpectator = false;
+ let allNations = {};
 
  function log(msg) {
    console.log(msg);
@@ -192,9 +201,7 @@
  // --- UI Functions ---
  function showScreen(id) {
    ['Main','Register','Login'].forEach(n => document.getElementById('menu'+n).classList.add('hidden'));
-   const target = document.getElementById('menu'+id);
-   if(target) target.classList.remove('hidden');
-   log("UI: " + id);
+   document.getElementById('menu'+id).classList.remove('hidden');
  }
 
  function setTab(id) {
@@ -206,130 +213,242 @@
    if(id === 'flag') initFlagEditor();
  }
 
- // --- DB Access ---
- async function getDB() { 
-   try { 
-     const r = await fetch(API_URL + "?t=" + Date.now()); 
-     if(r.ok) {
-       const raw = await r.json();
-       if(raw.compressed && raw.data) {
-         const decompressed = LZString.decompressFromUTF16(raw.data);
-         return decompressed ? JSON.parse(decompressed) : { nations: {} };
-       }
-       return raw.nations ? raw : { nations: {} };
+ // --- Realtime Sync Engine ---
+ function startGunSync() {
+   worldNode.map().on((data, key) => {
+     if(!data) { delete allNations[key]; return; }
+     
+     // Decompress geometries if needed
+     let parsed = {...data};
+     if(typeof data.geometries === 'string') {
+       parsed.geometries = JSON.parse(data.geometries);
      }
-   } catch(e){ log("DB Fetch Error: " + e.message); } 
-   return { nations: {} }; 
+     if(typeof data.resources === 'string') {
+       parsed.resources = JSON.parse(data.resources);
+     }
+     if(typeof data.allies === 'string') {
+       parsed.allies = JSON.parse(data.allies);
+     }
+     if(typeof data.requests === 'string') {
+       parsed.requests = JSON.parse(data.requests);
+     }
+
+     allNations[key] = parsed;
+
+     if(key === myName && !expansionMode) {
+       myData = parsed;
+       // Handle Incoming Secret Messages
+       if(myData.secretMsg) {
+         try {
+           const s = JSON.parse(myData.secretMsg);
+           alert("📩 密書 from " + s.from + ":\n" + s.msg);
+           worldNode.get(myName).put({secretMsg: null});
+         } catch(e){}
+       }
+       refreshUI();
+     }
+     renderWorld();
+   });
  }
 
- async function saveWorldDB(db) {
-   if(isSpectator) return;
-   isSyncing = true; log("Saving...");
-   try {
-     const compressedStr = LZString.compressToUTF16(JSON.stringify(db));
-     const payload = JSON.stringify({compressed:true, data:compressedStr});
-     await fetch(API_URL, { method:"POST", headers:{"Content-Type":"application/json"}, body: payload });
-     log("Saved.");
-   } catch(e) { log("Save Failed."); }
-   isSyncing = false; 
+ async function saveMe() {
+   if(isSpectator || !myName) return;
+   const exportData = {...myData};
+   // Gun.js does better with strings for arrays/objects in complex structures
+   exportData.geometries = JSON.stringify(myData.geometries);
+   exportData.resources = JSON.stringify(myData.resources);
+   exportData.allies = JSON.stringify(myData.allies);
+   exportData.requests = JSON.stringify(myData.requests);
+   
+   worldNode.get(myName).put(exportData);
+   
+   // Backup to Pantry occasionally
+   if(Math.random() > 0.9) backupToPantry();
  }
-  
- async function saveMe(newData) {
-  if(isSyncing || isSpectator) return;
-  try {
-   const db = await getDB();
-   if(!db.nations) db.nations = {};
-   db.nations[myName] = newData;
-   await saveWorldDB(db);
-   myData = newData; 
-  } catch(e) { log(e.message); }
+
+ async function backupToPantry() {
+   try {
+     const payload = JSON.stringify({nations: allNations});
+     fetch(PANTRY_URL, { method:"POST", headers:{"Content-Type":"application/json"}, body: payload });
+   } catch(e){}
  }
 
  // --- Auth ---
  async function register() {
-  const btn = document.getElementById('btnRegSubmit');
-  if(btn) { btn.disabled = true; btn.innerText = "..."; }
-  try {
-    const n = document.getElementById('regName').value;
-    const p = document.getElementById('regPass').value;
-    const curr = document.getElementById('regCurrency').value || "$";
-    if(!n || !p) throw new Error("入力不足");
-    const db = await getDB(); 
-    if(db.nations && db.nations[n]) throw new Error("使用済み");
-    if(!db.nations) db.nations = {};
-    db.nations[n] = { 
-      pass: p, money: 20000000, population: 50000, gdp: 5000, military: 500, 
-      area: 0, geometries: [], allies: [], requests: [], warTarget: null, flag: null,
-      happiness: 100, currency: curr, resources: { oil: 0, iron: 0 }, secretMsg: null
-    };
-    await saveWorldDB(db); 
-    alert("成功"); showScreen('Login');
-  } catch(e) { alert(e.message); } 
-  finally { if(btn) { btn.disabled = false; btn.innerText = "作成"; } }
+   const n = document.getElementById('regName').value;
+   const p = document.getElementById('regPass').value;
+   const curr = document.getElementById('regCurrency').value || "$";
+   if(!n || !p) return alert("入力不足");
+   
+   worldNode.get(n).once(async (exists) => {
+     if(exists) return alert("既に存在します");
+     const newData = {
+       pass: p, money: 20000000, population: 50000, gdp: 5000, military: 500, 
+       area: 0, geometries: "[]", allies: "[]", requests: "[]", warTarget: "", flag: "",
+       happiness: 100, currency: curr, resources: '{"oil":0,"iron":0}', secretMsg: null
+     };
+     worldNode.get(n).put(newData);
+     alert("建国成功"); showScreen('Login');
+   });
  }
 
  async function login(an, ap) {
-  const btn = document.getElementById('loginSubmitBtn');
-  if(btn) { btn.disabled = true; btn.innerText = "..."; }
-  try {
-    const n = an || document.getElementById('loginName').value;
-    const p = ap || document.getElementById('loginPass').value;
-    if(!n || !p) throw new Error("入力不足");
-    const db = await getDB();
-    const target = db.nations ? db.nations[n] : null;
-    if(!target || target.pass !== p) throw new Error("認証失敗");
-    localStorage.setItem('autoName', n); localStorage.setItem('autoPass', p);
-    myName = n; myData = target;
-    if(!myData.geometries) myData.geometries = []; 
-    if(!myData.allies) myData.allies = []; 
-    if(!myData.requests) myData.requests = [];
-    if(!myData.resources) myData.resources = { oil: 0, iron: 0 };
-    document.getElementById('overlayStart').classList.add('hidden'); 
-    document.getElementById('gameUI').classList.remove('hidden');
-    initMap(); startRealTimeSync(); 
-  } catch(e) {
-    alert(e.message);
-    document.getElementById('loadingMsg').style.display = 'none';
-  } finally {
-    if(btn) { btn.disabled = false; btn.innerText = "入国"; }
-  }
+   const n = an || document.getElementById('loginName').value;
+   const p = ap || document.getElementById('loginPass').value;
+   if(!n || !p) return;
+
+   worldNode.get(n).once((data) => {
+     if(!data || data.pass !== p) return alert("認証失敗");
+     
+     localStorage.setItem('autoName', n); localStorage.setItem('autoPass', p);
+     myName = n;
+     document.getElementById('overlayStart').classList.add('hidden'); 
+     document.getElementById('gameUI').classList.remove('hidden');
+     initMap();
+     startGunSync();
+     setInterval(ecoTick, 10000);
+   });
  }
 
- function startRealTimeSync() {
-  setInterval(syncWorld, 3000); 
-  if(!isSpectator) setInterval(ecoTick, 10000);  
+ // --- Map & Rendering ---
+ function initMap() {
+   if(map) return;
+   map = L.map('gameMap').setView([35, 135], 4);
+   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+   drawnItems = new L.FeatureGroup(); map.addLayer(drawnItems);
+   
+   map.on('popupopen', e => {
+     const c = document.createElement('div'); c.innerHTML = e.popup.getContent();
+     const b = c.querySelector('b');
+     if(b && b.innerText !== myName && !isSpectator) selectTarget(b.innerText);
+   });
+
+   map.on('click', async e => {
+     if(transferMode && selectedTarget) {
+       const pt = turf.point([e.latlng.lng, e.latlng.lat]);
+       let idx = -1;
+       for(let i=0; i<myData.geometries.length; i++){
+         if(turf.booleanPointInPolygon(pt, myData.geometries[i])) { idx = i; break; }
+       }
+       if(idx !== -1 && confirm(selectedTarget + "へ譲渡しますか？")) {
+         const poly = myData.geometries.splice(idx, 1)[0];
+         // Send to target
+         worldNode.get(selectedTarget).once(tData => {
+           let tGeos = JSON.parse(tData.geometries || "[]");
+           tGeos.push(poly);
+           worldNode.get(selectedTarget).put({geometries: JSON.stringify(tGeos)});
+           saveMe();
+           cancelActionMode();
+         });
+       }
+     }
+   });
  }
 
- async function syncWorld() {
-  if(isSyncing) return;
-  const db = await getDB();
-  if(!db.nations) return; 
+ function renderWorld() {
+   if(!drawnItems) return;
+   drawnItems.clearLayers();
+   Object.keys(allNations).forEach(key => {
+     const n = allNations[key];
+     if(!n.geometries) return;
+     const isMe = (key === myName);
+     const isWar = (myData.warTarget === key);
+     let color = isMe ? "#00f3ff" : (isWar ? "#ff8800" : "#ff0055");
+     
+     n.geometries.forEach(geo => {
+       L.geoJSON(geo, { style: { color: color, weight: 2, fillOpacity: 0.3 } })
+       .bindPopup(`<div style="text-align:center;"><b>${key}</b><br>軍事: ${n.military}<br>幸福: ${n.happiness}%</div>`).addTo(drawnItems);
+     });
+   });
+ }
 
-  const currentDataStr = JSON.stringify(db.nations);
-  if(currentDataStr !== lastWorldDataStr) {
-   renderWorld(db.nations);
-   lastWorldDataStr = currentDataStr;
-   if(!isSpectator && db.nations[myName] && !expansionMode) {
-    const sMe = db.nations[myName];
-    myData.area = sMe.area;
-    myData.geometries = sMe.geometries;
-    myData.warTarget = sMe.warTarget;
-    myData.requests = sMe.requests || [];
-    myData.allies = sMe.allies || [];
-    myData.population = sMe.population;
-    myData.happiness = sMe.happiness;
-    myData.resources = sMe.resources || {oil:0, iron:0};
-    if(Math.abs(sMe.money - myData.money) > 5000) myData.money = sMe.money;
-    if(sMe.secretMsg) {
-      alert("📩 密書 from " + sMe.secretMsg.from + ":\n" + sMe.secretMsg.msg);
-      sMe.secretMsg = null;
-      db.nations[myName] = sMe;
-      await saveWorldDB(db);
-    }
+ // --- Actions ---
+ function startExpansion() {
+   if(isSpectator) return;
+   expansionMode = true;
+   document.getElementById('mapMsg').style.display = 'block';
+   document.getElementById('cancelOverlay').style.display = 'block';
+   if(drawControl) map.removeControl(drawControl);
+   drawControl = new L.Control.Draw({ draw: { polygon: true, rectangle:true, circle:false, marker:false, polyline:false } });
+   map.addControl(drawControl);
+   
+   map.once(L.Draw.Event.CREATED, e => {
+     const newGeo = e.layer.toGeoJSON();
+     const a = Math.round(turf.area(newGeo)/1000000);
+     const cost = myData.area === 0 ? 0 : a * 100;
+     if(myData.money >= cost && confirm("購入コスト: " + cost)) {
+       myData.geometries.push(newGeo);
+       myData.money -= cost;
+       let ta = 0; myData.geometries.forEach(g => ta += Math.round(turf.area(g)/1000000));
+       myData.area = ta;
+       saveMe();
+     }
+     cancelActionMode();
+   });
+ }
+
+ function cancelActionMode() {
+   expansionMode = false; transferMode = false;
+   document.getElementById('mapMsg').style.display = 'none';
+   document.getElementById('cancelOverlay').style.display = 'none';
+   if(drawControl) map.removeControl(drawControl);
+ }
+
+ async function ecoTick() {
+   if(isSpectator) return;
+   const upkeep = myData.military * 2;
+   myData.money = Math.max(0, myData.money - upkeep);
+   const tax = parseInt(document.getElementById('taxRate').value);
+   myData.money += (myData.gdp || 0) * (tax/100);
+   myData.population = Math.floor((myData.population || 0) * 1.005);
+   if(myData.warTarget) {
+     const en = allNations[myData.warTarget];
+     if(en) {
+       if(myData.military > en.military) {
+         myData.military -= 50;
+         worldNode.get(myData.warTarget).put({military: Math.max(0, en.military - 100)});
+       }
+     }
    }
-   refreshUI();
-   if(!document.getElementById('tab-rank').classList.contains('hidden')) updateRanking(db);
-  }
+   saveMe();
+ }
+
+ function invest() { myData.money -= 2000; myData.gdp += 500; saveMe(); }
+ function recruit() { if(myData.money>=1000){myData.money-=1000; myData.military+=250; saveMe();} }
+ function sendDM() { 
+   const m = prompt("メッセージ:"); 
+   if(m && selectedTarget) {
+     worldNode.get(selectedTarget).put({secretMsg: JSON.stringify({from:myName, msg:m})});
+     alert("送信完了");
+   }
+ }
+
+ function selectTarget(n) { 
+   selectedTarget = n; 
+   document.getElementById('targetName').innerText = n; 
+   document.querySelectorAll('#tab-war button').forEach(b => b.disabled = false); 
+ }
+
+ function refreshUI() {
+   document.getElementById('valMoney').innerText = Math.floor(myData.money).toLocaleString();
+   document.getElementById('valArea').innerText = (myData.area || 0).toLocaleString();
+   document.getElementById('valGDP').innerText = (myData.gdp || 0).toLocaleString();
+   document.getElementById('valMil').innerText = (myData.military || 0).toLocaleString();
+   document.getElementById('valPop').innerText = Math.floor(myData.population || 0).toLocaleString();
+   document.getElementById('uiName').innerText = myName;
+   document.getElementById('valHappy').innerText = myData.happiness || 100;
+   document.getElementById('uiCurrency').innerText = myData.currency || "$";
+   document.getElementById('valUpkeep').innerText = "-" + (myData.military * 2).toLocaleString();
+ }
+
+ function updateRanking() {
+   const ranks = Object.keys(allNations).map(k => ({
+     name: k, score: Math.floor((allNations[k].gdp||0) + (allNations[k].military||0)*10)
+   })).sort((a,b) => b.score - a.score);
+   const list = document.getElementById('rankingList'); list.innerHTML = "";
+   ranks.slice(0,10).forEach((r,i) => {
+     list.innerHTML += `<div class="rank-item"><span class="rank-num">${i+1}</span><span>${r.name}</span><span style="margin-left:auto">${r.score.toLocaleString()}</span></div>`;
+   });
  }
 
  function startSpectator() {
@@ -338,222 +457,15 @@
    document.getElementById('gameUI').classList.remove('hidden');
    document.getElementById('playerControls').classList.add('hidden');
    document.getElementById('spectatorMsg').classList.remove('hidden');
-   document.getElementById('uiName').innerText = "SPECTATOR";
-   initMap(); startRealTimeSync();
+   initMap(); startGunSync();
  }
-
- // --- Map ---
- function initMap() {
-  if(map) return;
-  map = L.map('gameMap').setView([35, 135], 4);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
-  drawnItems = new L.FeatureGroup(); map.addLayer(drawnItems);
-  map.on('popupopen', e => {
-   const container = document.createElement('div');
-   container.innerHTML = e.popup.getContent();
-   const bTag = container.querySelector('b');
-   if(bTag && bTag.innerText !== myName && !isSpectator) selectTarget(bTag.innerText);
-  });
-  map.on('click', async e => {
-    if(transferMode && selectedTarget) {
-      const clickedPoint = turf.point([e.latlng.lng, e.latlng.lat]);
-      let foundIdx = -1;
-      for(let i=0; i<myData.geometries.length; i++) {
-        if(turf.booleanPointInPolygon(clickedPoint, myData.geometries[i])) { foundIdx = i; break; }
-      }
-      if(foundIdx !== -1 && confirm("譲渡: " + selectedTarget + "へ?")) {
-        const db = await getDB();
-        const poly = db.nations[myName].geometries.splice(foundIdx, 1)[0];
-        db.nations[selectedTarget].geometries.push(poly);
-        // Recalc areas
-        [myName, selectedTarget].forEach(k => {
-          let a = 0; db.nations[k].geometries.forEach(g => a += Math.round(turf.area(g)/1000000));
-          db.nations[k].area = a;
-        });
-        await saveWorldDB(db); alert("完了"); cancelActionMode();
-      }
-    }
-  });
- }
-
- function renderWorld(ns) {
-  if(!drawnItems) return;
-  drawnItems.clearLayers();
-  Object.keys(ns).forEach(key => {
-   const n = ns[key];
-   const isMe = (key === myName);
-   const isAlly = (myData.allies || []).includes(key);
-   const isWar = (myData.warTarget === key);
-   let color = isMe ? "#00f3ff" : (isWar ? "#ff8800" : (isAlly ? "#00ff99" : "#ff0055"));
-   const fImg = n.flag ? `<img src="${n.flag}" class="pop-flag">` : "";
-   (n.geometries || []).forEach(geo => {
-    L.geoJSON(geo, { style: { color: color, weight: 2, fillOpacity: 0.3 } })
-    .bindPopup(`<div style="text-align:center;">${fImg}<b>${key}</b><br>軍事: ${n.military}<br>人口: ${Math.floor(n.population || 0).toLocaleString()}<br>幸福: ${n.happiness || 100}%</div>`).addTo(drawnItems);
-   });
-  });
- }
-
- function startExpansion() {
-  if(isSpectator) return;
-  expansionMode = true; 
-  document.getElementById('mapMsg').innerText="【領土購入モード】"; 
-  document.getElementById('mapMsg').style.display = 'block';
-  document.getElementById('cancelOverlay').style.display = 'block'; 
-  if(drawControl) map.removeControl(drawControl);
-  drawControl = new L.Control.Draw({ draw: { polygon: { allowIntersection: false }, rectangle:true, circle:false, marker:false, polyline:false }, edit: false });
-  map.addControl(drawControl);
-  map.once(L.Draw.Event.CREATED, async e => {
-   if(!expansionMode) return;
-   const newGeo = e.layer.toGeoJSON(); 
-   const db = await getDB(); 
-   let overlap = false;
-   Object.keys(db.nations).forEach(k => { (db.nations[k].geometries || []).forEach(g => { if(turf.intersect(newGeo, g)) overlap = true; }); });
-   if(overlap) { alert("重複しています"); cancelActionMode(); return; }
-   const a = Math.round(turf.area(newGeo)/1000000);
-   const cost = myData.area === 0 ? 0 : a * 100;
-   if(myData.money >= cost && confirm("費用 " + cost.toLocaleString() + " で購入?")) {
-    myData.geometries.push(newGeo);
-    myData.money -= cost; 
-    let totalA = 0; myData.geometries.forEach(g => totalA += Math.round(turf.area(g)/1000000));
-    myData.area = totalA;
-    await saveMe(myData); alert("購入完了");
-   }
-   cancelActionMode();
-  });
- }
-  
- function cancelActionMode() {
-   expansionMode = false; transferMode = false;
-   document.getElementById('mapMsg').style.display = 'none';
-   document.getElementById('cancelOverlay').style.display = 'none';
-   if(drawControl) map.removeControl(drawControl);
- }
-
- // --- Logic ---
- async function ecoTick() { 
-  if(!myData.gdp || isSpectator) return;
-  const upkeep = myData.military * 2; 
-  if(myData.money >= upkeep) myData.money -= upkeep;
-  else { myData.military = Math.floor(myData.money / 2); myData.money = 0; myData.happiness = Math.max(0, myData.happiness - 2); }
-  const tax = parseInt(document.getElementById('taxRate').value);
-  myData.money += myData.gdp * (tax/100); 
-  if(myData.area > 0) {
-    myData.resources.oil += Math.floor(myData.area / 500) + 1;
-    myData.resources.iron += Math.floor(myData.area / 300) + 1;
-  }
-  if(tax > 20) myData.happiness = Math.max(0, myData.happiness - 2);
-  else if(tax <= 10) myData.happiness = Math.min(100, myData.happiness + 1);
-  if(myData.happiness >= 80) myData.population *= 1.02;
-  else if(myData.happiness <= 20) myData.population *= 0.98;
-  else myData.population *= 1.005;
-  if(myData.warTarget) await autoWarProcess();
-  refreshUI(); saveMe(myData);
- }
-
- async function autoWarProcess() {
-  const db = await getDB();
-  const enName = myData.warTarget;
-  let en = db.nations[enName];
-  if(!en) { myData.warTarget = null; return; }
-  if(myData.military * (0.6 + Math.random()) > en.military * (0.6 + Math.random())) {
-    en.military = Math.max(0, en.military - 100); myData.military = Math.max(0, myData.military - 50);
-    if(en.geometries.length > 0) myData.geometries.push(en.geometries.pop());
-    if(en.geometries.length === 0 || en.military <= 0) {
-      alert(enName + " を併合！");
-      myData.money += en.money; delete db.nations[enName]; myData.warTarget = null;
-    } else { db.nations[enName] = en; }
-  } else { myData.military = Math.max(0, myData.military - 100); }
-  db.nations[myName] = myData; await saveWorldDB(db);
- }
-
- function invest() { if(myData.money>=2000){myData.money-=2000; myData.gdp+=500; refreshUI(); saveMe(myData);} }
- function recruit() { if(myData.money>=1000 && myData.population>=500){myData.money-=1000; myData.population-=500; myData.military+=250; refreshUI(); saveMe(myData);} }
- function draftSoldiers() { if(confirm("強制徴兵?")){ if(myData.population>=2000){myData.population-=2000; myData.military+=2000; myData.happiness=Math.max(0,myData.happiness-20); refreshUI(); saveMe(myData);} } }
- function sellResources() { const earn = (myData.resources.oil*100)+(myData.resources.iron*50); if(earn>0){myData.money+=earn; myData.resources.oil=0; myData.resources.iron=0; refreshUI(); saveMe(myData); alert("売却: "+earn);} }
- function printMoney() { if(confirm("通貨発行?")){ myData.money+=10000; myData.happiness=Math.max(0,myData.happiness-5); refreshUI(); saveMe(myData); } }
-  
- async function sendDM() {
-   if(!selectedTarget) return;
-   const m = prompt("宛先: " + selectedTarget + " への密書:");
-   if(m) {
-     const db = await getDB();
-     if(db.nations[selectedTarget]) { db.nations[selectedTarget].secretMsg = {from:myName, msg:m}; await saveWorldDB(db); alert("送信完了"); }
-   }
- }
-
- async function sendMoney() {
-   if(!selectedTarget) return;
-   const a = parseInt(prompt("送金額:"));
-   if(a > 0 && myData.money >= a) {
-     myData.money -= a; const db = await getDB();
-     if(db.nations[selectedTarget]) { db.nations[selectedTarget].money += a; db.nations[myName] = myData; await saveWorldDB(db); alert("送金完了"); }
-   }
- }
-
- function startTransferGeo() { if(selectedTarget) { alert("譲渡モード開始"); transferMode = true; document.getElementById('mapMsg').innerText="【譲渡モード】相手: "+selectedTarget; document.getElementById('mapMsg').style.display='block'; document.getElementById('cancelOverlay').style.display='block'; } }
- function manualSave() { saveMe(myData); alert("保存完了"); }
- function doLogout() { localStorage.clear(); location.reload(); }
- function selectTarget(n) { selectedTarget = n; document.getElementById('targetName').innerText = n; document.querySelectorAll('#tab-war button').forEach(b=>b.disabled=false); }
- async function actionAlly() { if(!selectedTarget)return; const db = await getDB(); if(!db.nations[selectedTarget].requests) db.nations[selectedTarget].requests=[]; if(!db.nations[selectedTarget].requests.includes(myName)){db.nations[selectedTarget].requests.push(myName); await saveWorldDB(db); alert("申請完了");} }
- async function acceptRequest(s) { myData.requests=myData.requests.filter(r=>r!==s); myData.allies.push(s); const db=await getDB(); if(db.nations[s]){ if(!db.nations[s].allies)db.nations[s].allies=[]; db.nations[s].allies.push(myName); db.nations[myName]=myData; await saveWorldDB(db); syncWorld(); alert("同盟成立: "+s);} }
- async function actionWar() { if(confirm(selectedTarget+" に宣戦布告?")){ myData.warTarget=selectedTarget; saveMe(myData); } }
-
- function refreshUI() {
-  if(isSpectator) return;
-  document.getElementById('valMoney').innerText = Math.floor(myData.money).toLocaleString();
-  document.getElementById('valArea').innerText = (myData.area || 0).toLocaleString();
-  document.getElementById('valGDP').innerText = Math.floor(myData.gdp).toLocaleString();
-  document.getElementById('valMil').innerText = Math.floor(myData.military).toLocaleString();
-  document.getElementById('valPop').innerText = Math.floor(myData.population || 0).toLocaleString();
-  document.getElementById('uiName').innerText = myName;
-  document.getElementById('uiCurrency').innerText = myData.currency || "$";
-  document.getElementById('uiCurrency2').innerText = myData.currency || "$";
-  document.getElementById('valHappy').innerText = myData.happiness;
-  document.getElementById('valOil').innerText = myData.resources.oil;
-  document.getElementById('valIron').innerText = myData.resources.iron;
-  document.getElementById('valUpkeep').innerText = "-" + (myData.military * 2).toLocaleString();
-  const rb = document.getElementById('requestBox');
-  rb.innerHTML = (myData.requests && myData.requests.length > 0) ? "" : "申請なし";
-  (myData.requests || []).forEach(s => { rb.innerHTML += `<div>${s} <button class="admin-edit-btn" onclick="acceptRequest('${s}')">承諾</button></div>`; });
- }
-  
- async function updateRanking(dbParam) {
-  const db = dbParam || await getDB();
-  const ranks = Object.keys(db.nations).map(k => {
-   const n = db.nations[k]; 
-   const s = Math.floor(n.gdp + (n.military * 10) + (n.area / 100));
-   return { name: k, score: s };
-  }).sort((a, b) => b.score - a.score);
-  const list = document.getElementById('rankingList'); list.innerHTML = "";
-  ranks.slice(0, 10).forEach((r, i) => { list.innerHTML += `<div class="rank-item"><span class="rank-num">${i+1}</span><span>${r.name}</span><span style="margin-left:auto">${r.score.toLocaleString()}</span></div>`; });
- }
-
- function attemptAdminLogin() { if(document.getElementById('adminKey').value === "201305042020302") { document.getElementById('adminPanel').classList.remove('hidden'); refreshAdminList(); } }
- function closeAdmin() { document.getElementById('adminPanel').classList.add('hidden'); }
- async function refreshAdminList() {
-  const t = document.getElementById('adminTableBody'); t.innerHTML = ""; const db = await getDB();
-  Object.keys(db.nations).forEach(k => {
-   const n = db.nations[k];
-   t.innerHTML += `<tr><td>${k}</td><td>${n.money} <button class="admin-edit-btn" onclick="adminEdit('${k}','money',${n.money})">変</button></td><td>${n.happiness}</td><td>${n.population}</td><td>${n.area}</td><td>${n.gdp}</td><td><button onclick="del('${k}')" style="background:red">消</button></td></tr>`;
-  });
- }
- async function adminEdit(c,k,v){ let n=prompt("変更後",v); if(n!==null){ const db=await getDB(); db.nations[c][k]=Number(n); await saveWorldDB(db); refreshAdminList(); }}
- async function del(n){ if(confirm("削除?")){ const db=await getDB(); delete db.nations[n]; await saveWorldDB(db); refreshAdminList(); }}
-
- let flagCtx, fCur="#fff", fDraw=false;
- function initFlagEditor() {
-  const c = document.getElementById('flagCanvas'); flagCtx = c.getContext('2d');
-  if(myData.flag) { const i=new Image(); i.onload=()=>flagCtx.drawImage(i,0,0); i.src=myData.flag; } else { flagCtx.fillStyle="#fff"; flagCtx.fillRect(0,0,100,60); }
-  const pal = document.getElementById('paletteBox'); pal.innerHTML="";
-  ['#000','#fff','#f00','#0f0','#00f','#ff0','#0ff','#f0f'].forEach(col => { const d = document.createElement('div'); d.className='color-dot'; d.style.background=col; d.onclick=()=>fCur=col; pal.appendChild(d); });
-  c.onmousedown=e=>{ fDraw=true; drawF(e); }; c.onmousemove=e=>{ if(fDraw) drawF(e); }; c.onmouseup=()=>fDraw=false;
- }
- function drawF(e) { const r=document.getElementById('flagCanvas').getBoundingClientRect(); flagCtx.fillStyle=fCur; flagCtx.fillRect(Math.floor((e.clientX-r.left)/10)*10, Math.floor((e.clientY-r.top)/10)*10, 10, 10); }
- function clearFlag() { flagCtx.fillStyle="#fff"; flagCtx.fillRect(0,0,100,60); }
- async function saveFlag() { myData.flag = document.getElementById('flagCanvas').toDataURL(); saveMe(myData); alert("保存"); }
 
  window.onkeydown = e => { if(e.shiftKey && e.altKey) document.getElementById('overlayAdminAuth').classList.remove('hidden'); };
- window.onload = () => { const n=localStorage.getItem('autoName'), p=localStorage.getItem('autoPass'); if(n && p) login(n,p); };
+ window.onload = () => { 
+   const n = localStorage.getItem('autoName'), p = localStorage.getItem('autoPass'); 
+   if(n && p) login(n,p); 
+   log("Ready. Use Shift+Alt for Admin.");
+ };
 </script>
 </body>
 </html>
