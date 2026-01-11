@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <title>Global Strategy: Online Final</title>
+ <title>Global Strategy: Online Absolute Edition</title>
   
  <!-- Fonts -->
  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Noto+Sans+JP:wght@300;400;700&display=swap" rel="stylesheet">
@@ -15,7 +15,6 @@
  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
  <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
  <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
- <!-- Gun.js -->
  <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
 
 <style>
@@ -28,7 +27,7 @@
  h1 { color: var(--neon-blue); text-align: center; font-family: 'Orbitron'; font-size: 1.4em; border-bottom: 2px solid var(--neon-blue); padding-bottom: 10px; margin-top: 0; }
  h3 { color: var(--neon-gold); font-size: 0.9em; margin-top: 15px; border-left: 3px solid var(--neon-gold); padding-left: 8px; font-family: 'Orbitron'; }
  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 15px; }
- .stat-card { background: #1a1a1a; padding: 8px; border-radius: 4px; text-align: center; border: 1px solid #333; position: relative; }
+ .stat-card { background: #1a1a1a; padding: 8px; border-radius: 4px; text-align: center; border: 1px solid #333; }
  .stat-val { font-family: 'Orbitron'; font-size: 1.1em; color: white; display: block; }
  .stat-label { font-size: 0.7em; color: #888; }
  button { width: 100%; padding: 10px; margin-bottom: 5px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-family: 'Noto Sans JP'; transition: 0.2s; }
@@ -37,14 +36,22 @@
  .btn-main { background: var(--neon-blue); color: black; }
  .btn-war { background: var(--neon-red); color: white; }
  .btn-buy { background: var(--neon-green); color: black; }
+ .btn-eco { background: var(--neon-purple); color: white; }
+ .btn-trade { background: var(--neon-gold); color: black; }
  .btn-sub { background: #333; color: #ccc; }
  input { background: #222; border: 1px solid #555; color: white; padding: 10px; width: 100%; box-sizing: border-box; margin-bottom: 10px; }
  .tabs { display: flex; gap: 2px; margin-bottom: 10px; }
  .tab { flex: 1; padding: 8px; background: #222; color: #888; text-align: center; cursor: pointer; font-size: 0.7em; }
  .tab.active { background: #333; color: var(--neon-blue); border-bottom: 2px solid var(--neon-blue); }
  .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; display: flex; justify-content: center; align-items: center; }
- .modal { background: #111; border: 1px solid var(--neon-blue); padding: 30px; width: 400px; max-width: 90%; text-align: center; border-radius: 8px; }
+ .modal { background: #111; border: 1px solid var(--neon-blue); padding: 30px; width: 400px; max-width: 90%; text-align: center; border-radius: 8px; box-shadow: 0 0 20px var(--neon-blue); }
  .hidden { display: none !important; }
+ #adminPanel { position: fixed; top: 5%; left: 5%; width: 90%; height: 90%; background: #000; border: 2px solid var(--neon-red); z-index: 10000; padding: 20px; overflow-y: auto; color: var(--neon-red); }
+ table { width: 100%; border-collapse: collapse; margin-top: 10px; color: #ccc; font-size: 0.85em; }
+ th, td { border: 1px solid #333; padding: 8px; text-align: center; }
+ canvas { border: 1px solid #555; background: #000; cursor: crosshair; image-rendering: pixelated; margin: 0 auto; display: block;}
+ .palette { display: flex; justify-content: center; gap: 5px; margin-top: 5px; }
+ .color-dot { width: 20px; height: 20px; border-radius: 50%; border: 1px solid #fff; cursor: pointer; }
  #debugLog { position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.8); color: lime; font-size: 10px; z-index: 20000; padding: 2px; }
 </style>
 </head> 
@@ -74,6 +81,21 @@
  </div>
 </div>
 
+<div id="overlayAdminAuth" class="overlay hidden"> 
+ <div class="modal" style="border-color:red;"> 
+ <h2>管理者認証</h2> 
+ <input type="password" id="adminKey" placeholder="Password"> 
+ <button class="btn-war" onclick="attemptAdminLogin()">UNLOCK</button> 
+ <button class="btn-sub" onclick="document.getElementById('overlayAdminAuth').classList.add('hidden')">閉じる</button>
+ </div> 
+</div>
+
+<div id="adminPanel" class="hidden"> 
+ <h2>⚠️ サーバーコンソール</h2> 
+ <button class="btn-sub" onclick="closeAdmin()">閉じる</button> 
+ <table><thead><tr><th>国名</th><th>資金</th><th>幸福</th><th>面積</th><th>GDP</th><th>操作</th></tr></thead><tbody id="adminTableBody"></tbody></table> 
+</div>
+
 <div id="gameUI" class="app-container hidden"> 
  <div class="map-section"> 
  <div id="gameMap"></div> 
@@ -86,37 +108,66 @@
   <div class="stat-card"><span class="stat-label">軍事力</span><span class="stat-val" id="valMilGrid" style="color:var(--neon-red);">0</span></div>
   <div class="stat-card"><span class="stat-label">人口</span><span class="stat-val" id="valPop">0</span><span>人</span></div>
   <div class="stat-card"><span class="stat-label">面積</span><span class="stat-val" id="valArea">0</span><span>km²</span></div>
+  <div class="stat-card"><span class="stat-label">幸福度</span><span class="stat-val" id="valHappy" style="color:var(--neon-green);">100</span><span>%</span></div>
+  <div class="stat-card"><span class="stat-label">石油 <span class="res-icon">🛢️</span></span><span class="stat-val" id="valOil">0</span></div>
  </div>
- <div class="tabs"> <div class="tab active" onclick="setTab('main')">内政</div> <div class="tab" onclick="setTab('war')">軍事・外交</div> </div>
+ <div class="tabs"> 
+   <div class="tab active" onclick="setTab('main')">内政</div> 
+   <div class="tab" onclick="setTab('war')">軍事・外交</div> 
+   <div class="tab" onclick="setTab('rank')">順位</div> 
+   <div class="tab" onclick="setTab('flag')">国旗</div> 
+ </div>
   
  <div id="playerControls">
   <div id="tab-main"> 
+    <h3>経済</h3> 
+    <div style="font-size:0.8em; color:#ccc; margin-bottom:5px;">GDP: <b id="valGDP">0</b> / 維持費: <span id="valUpkeep" style="color:var(--neon-red)">0</span></div>
     <button class="btn-main" onclick="invest()">🏭 産業投資 (-2000)</button> 
+    <button class="btn-eco" onclick="sellResources()">💰 資源売却</button>
+    <button class="btn-war" onclick="printMoney()">💸 通貨発行 (+10k/幸↓)</button>
+    <div style="margin-top:10px; font-size:0.8em;">税率: <span id="taxVal">10</span>% <input type="range" id="taxRate" min="0" max="80" value="10" onchange="document.getElementById('taxVal').innerText=this.value"></div> 
+    <h3>領土</h3> 
     <button class="btn-buy" onclick="startExpansion()">🗺️ 領土購入</button> 
+    <button class="btn-sub" onclick="manualSave()">💾 手動保存</button> 
     <button class="btn-sub" onclick="doLogout()">🚪 ログアウト</button> 
   </div>
   <div id="tab-war" class="hidden"> 
+    <h3>軍備</h3> 
     <button class="btn-war" onclick="recruit()">⚔️ 通常雇用 (-$1k)</button> 
-    <h3>ターゲット: <b id="targetName">なし</b></h3> 
-    <button class="btn-war" id="btnWar" onclick="actionWar()" disabled>💣 宣戦布告</button> 
+    <button class="btn-eco" onclick="draftSoldiers()">📢 強制徴兵</button>
+    <h3>外交: <b id="targetName">未選択</b></h3> 
+    <div id="requestBox" style="font-size:0.8em; background:#222; padding:5px; margin-bottom:5px;">同盟申請なし</div>
+    <div style="display:flex; gap:5px;">
+      <button class="btn-trade" id="btnSendMoney" onclick="sendMoney()" disabled>💸 送金</button>
+      <button class="btn-trade" id="btnCedeLand" onclick="startTransferGeo()" disabled>🗺️ 譲渡</button>
+    </div>
+    <button class="btn-sub" id="btnDM" onclick="sendDM()" disabled>📩 密書</button>
+    <button class="btn-buy" id="btnAlly" onclick="actionAlly()" disabled>🤝 同盟</button>
+    <button class="btn-war" id="btnWar" onclick="actionWar()" disabled>💣 宣戦</button> 
   </div>
+  <div id="tab-flag" class="hidden">
+    <canvas id="flagCanvas" width="100" height="60"></canvas>
+    <div class="palette" id="paletteBox"></div>
+    <button class="btn-main" onclick="saveFlag()">保存</button>
+  </div>
+  <div id="tab-rank" class="hidden"><div id="rankingList"></div></div>
  </div>
  <div id="spectatorMsg" class="hidden" style="padding:20px; text-align:center;"><h3>👁️ 観戦中</h3></div>
- <div id="cancelOverlay" style="position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:2000; display:none;"><button class="btn-war" onclick="cancelActionMode()">❌ キャンセル</button></div>
+ <div id="cancelOverlay" style="position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:2000; display:none;"><button class="btn-war" onclick="cancelActionMode()">❌ 中止</button></div>
  </div>
 </div>
 
-<div id="debugLog">System booting...</div>
+<div id="debugLog">Gun.js Connecting...</div>
 
 <script>
- // --- Gun.js Config ---
+ // --- Config ---
  const PANTRY_ID = "6fafdf00-0e50-4e44-a7ee-21e3a266898c";
  const gun = Gun(['https://gun-manhattan.herokuapp.com/gun']);
- const worldNode = gun.get('global-strategy-v3').get('nations');
+ const worldNode = gun.get('global-strategy-v4').get('nations');
 
  // --- Globals ---
- let myName = "", myData = {geometries:[]}, map, drawnItems, drawControl, selectedTarget = null;
- let allNations = {}, isSpectator = false, expansionMode = false;
+ let myName = "", myData = {}, map, drawnItems, drawControl, selectedTarget = null;
+ let allNations = {}, isSpectator = false, expansionMode = false, transferMode = false;
 
  function log(msg) { document.getElementById('debugLog').innerText = msg; }
 
@@ -128,23 +179,34 @@
  function setTab(id) {
    document.querySelectorAll('[id^="tab-"]').forEach(e => e.classList.add('hidden'));
    document.getElementById('tab-'+id).classList.remove('hidden');
+   document.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
+   if(event) event.target.classList.add('active');
+   if(id === 'rank') updateRanking();
+   if(id === 'flag') initFlagEditor();
  }
 
- // --- Sync Logic ---
+ // --- Sync ---
  function startGunSync() {
    worldNode.map().on((data, key) => {
      if(!data) { delete allNations[key]; return; }
-     
-     // データの正規化
      let n = {...data};
      try {
-       n.geometries = typeof data.geometries === 'string' ? JSON.parse(data.geometries) : (data.geometries || []);
-     } catch(e) { n.geometries = []; }
-
+       n.geometries = typeof data.geometries === 'string' ? JSON.parse(data.geometries) : [];
+       n.resources = typeof data.resources === 'string' ? JSON.parse(data.resources) : {oil:0, iron:0};
+       n.requests = typeof data.requests === 'string' ? JSON.parse(data.requests) : [];
+       n.allies = typeof data.allies === 'string' ? JSON.parse(data.allies) : [];
+     } catch(e) { n.geometries = []; n.resources = {oil:0, iron:0}; }
+     
      allNations[key] = n;
-
      if(key === myName && !expansionMode) {
        myData = n;
+       if(myData.secretMsg) {
+         try {
+           const s = JSON.parse(myData.secretMsg);
+           alert(`📩 密書 from ${s.from}:\n${s.msg}`);
+           worldNode.get(myName).put({secretMsg: null});
+         } catch(e){}
+       }
        refreshUI();
      }
      renderWorld();
@@ -153,13 +215,15 @@
 
  async function saveMe() {
    if(isSpectator || !myName) return;
-   const exportData = {...myData};
-   // 配列は必ず文字列化して保存
-   exportData.geometries = JSON.stringify(myData.geometries || []);
-   worldNode.get(myName).put(exportData);
+   const d = {...myData};
+   d.geometries = JSON.stringify(myData.geometries || []);
+   d.resources = JSON.stringify(myData.resources || {oil:0, iron:0});
+   d.requests = JSON.stringify(myData.requests || []);
+   d.allies = JSON.stringify(myData.allies || []);
+   worldNode.get(myName).put(d);
  }
 
- // --- Map Logic ---
+ // --- Map ---
  function initMap() {
    if(map) return;
    map = L.map('gameMap').setView([35, 135], 4);
@@ -169,10 +233,22 @@
    map.on('popupopen', e => {
      const b = document.createElement('div'); b.innerHTML = e.popup.getContent();
      const name = b.querySelector('b') ? b.querySelector('b').innerText : null;
-     if(name && name !== myName && !isSpectator) {
-       selectedTarget = name;
-       document.getElementById('targetName').innerText = name;
-       document.getElementById('btnWar').disabled = false;
+     if(name && name !== myName && !isSpectator) selectTarget(name);
+   });
+
+   map.on('click', e => {
+     if(transferMode && selectedTarget) {
+       const pt = turf.point([e.latlng.lng, e.latlng.lat]);
+       let idx = myData.geometries.findIndex(g => turf.booleanPointInPolygon(pt, g));
+       if(idx !== -1 && confirm(`${selectedTarget}にこの領土を譲渡？`)) {
+         const poly = myData.geometries.splice(idx, 1)[0];
+         worldNode.get(selectedTarget).once(td => {
+            let tgeos = JSON.parse(td.geometries || "[]");
+            tgeos.push(poly);
+            worldNode.get(selectedTarget).put({geometries: JSON.stringify(tgeos)});
+            saveMe(); cancelActionMode();
+         });
+       }
      }
    });
  }
@@ -182,100 +258,126 @@
    drawnItems.clearLayers();
    Object.keys(allNations).forEach(key => {
      const n = allNations[key];
-     if(!n.geometries || !Array.isArray(n.geometries)) return;
-     
+     if(!n.geometries) return;
      const isMe = (key === myName);
-     const color = isMe ? "#00f3ff" : "#ff0055";
+     const isWar = (myData.warTarget === key);
+     const isAlly = (myData.allies || []).includes(key);
+     
+     let color = isMe ? "#00f3ff" : (isWar ? "#ff8800" : (isAlly ? "#00ff99" : "#ff0055"));
+     const f = n.flag ? `<img src="${n.flag}" style="width:50px;display:block;margin:0 auto;">` : "";
      
      n.geometries.forEach(geo => {
        L.geoJSON(geo, { style: { color: color, weight: 2, fillOpacity: 0.4 } })
-       .bindPopup(`<b>${key}</b><br>軍事: ${n.military || 0}`)
+       .bindPopup(`<div style="text-align:center;">${f}<b>${key}</b><br>軍事: ${n.military || 0}</div>`)
        .addTo(drawnItems);
      });
    });
  }
 
- // --- Actions ---
- function startExpansion() {
-   if(isSpectator) return;
-   expansionMode = true;
-   document.getElementById('mapMsg').innerText="領土を囲んでください";
-   document.getElementById('mapMsg').style.display = 'block';
-   document.getElementById('cancelOverlay').style.display = 'block';
-   if(drawControl) map.removeControl(drawControl);
-   drawControl = new L.Control.Draw({ draw: { polygon: true, rectangle:true, circle:false, marker:false, polyline:false } });
-   map.addControl(drawControl);
-   
-   map.once(L.Draw.Event.CREATED, e => {
-     const newGeo = e.layer.toGeoJSON();
-     const a = Math.round(turf.area(newGeo)/1000000);
-     const cost = (myData.area || 0) === 0 ? 0 : a * 100;
-     
-     if(myData.money >= cost) {
-       if(!myData.geometries) myData.geometries = [];
-       myData.geometries.push(newGeo);
-       myData.money -= cost;
-       let totalArea = 0;
-       myData.geometries.forEach(g => totalArea += Math.round(turf.area(g)/1000000));
-       myData.area = totalArea;
-       saveMe();
-       alert("購入成功: " + a + "km²");
-     } else { alert("資金不足"); }
-     cancelActionMode();
-   });
- }
-
- function cancelActionMode() {
-   expansionMode = false;
-   document.getElementById('mapMsg').style.display = 'none';
-   document.getElementById('cancelOverlay').style.display = 'none';
-   if(drawControl) map.removeControl(drawControl);
- }
-
- // --- Auth ---
- function register() {
-   const n = document.getElementById('regName').value, p = document.getElementById('regPass').value;
-   if(!n || !p) return alert("未入力");
-   worldNode.get(n).put({ pass:p, money:20000, population:1000, gdp:500, military:100, geometries:"[]", area:0 });
-   alert("成功"); showScreen('Login');
- }
- function login() {
-   const n = document.getElementById('loginName').value, p = document.getElementById('loginPass').value;
-   worldNode.get(n).once(d => {
-     if(!d || d.pass !== p) return alert("失敗");
-     myName = n; localStorage.setItem('autoName', n); localStorage.setItem('autoPass', p);
-     document.getElementById('overlayStart').classList.add('hidden');
-     document.getElementById('gameUI').classList.remove('hidden');
-     initMap(); startGunSync();
-     setInterval(ecoTick, 10000);
-   });
- }
- function doLogout() { localStorage.clear(); location.reload(); }
- function startSpectator() { isSpectator = true; document.getElementById('overlayStart').classList.add('hidden'); document.getElementById('gameUI').classList.remove('hidden'); document.getElementById('playerControls').classList.add('hidden'); document.getElementById('spectatorMsg').classList.remove('hidden'); initMap(); startGunSync(); }
-
+ // --- Logic ---
  function ecoTick() {
    if(isSpectator) return;
    const upkeep = (myData.military || 0) * 2;
    myData.money = Math.max(0, (myData.money || 0) - upkeep);
-   myData.money += (myData.gdp || 0) * 0.1; // 10% tax fixed for simple sync
+   const tax = parseInt(document.getElementById('taxRate').value);
+   myData.money += (myData.gdp || 0) * (tax/100);
+   if(tax > 20) myData.happiness = Math.max(0, (myData.happiness || 100) - 2);
+   if(myData.area > 0) {
+     myData.resources.oil += Math.floor(myData.area / 500) + 1;
+   }
+   if(myData.warTarget) {
+     const en = allNations[myData.warTarget];
+     if(en && (myData.military > en.military)) {
+        worldNode.get(myData.warTarget).put({military: Math.max(0, en.military - 50)});
+        myData.military -= 10;
+     }
+   }
    saveMe();
  }
 
  function invest() { if(myData.money>=2000){ myData.money-=2000; myData.gdp=(myData.gdp||0)+500; saveMe(); } }
+ function sellResources() { let e=(myData.resources.oil*100); myData.money+=e; myData.resources.oil=0; saveMe(); alert(`+$${e}`); }
  function recruit() { if(myData.money>=1000){ myData.money-=1000; myData.military=(myData.military||0)+250; saveMe(); } }
+ function draftSoldiers() { myData.military+=1000; myData.happiness-=20; saveMe(); }
+ function printMoney() { myData.money+=10000; myData.happiness-=10; saveMe(); }
+ function sendDM() { let m=prompt("密書:"); if(m) worldNode.get(selectedTarget).put({secretMsg: JSON.stringify({from:myName, msg:m})}); }
+ function sendMoney() { let a=parseInt(prompt("送金額:")); if(a<=myData.money){ myData.money-=a; worldNode.get(selectedTarget).once(d=>{ worldNode.get(selectedTarget).put({money: (d.money||0)+a}); saveMe(); }); } }
+ function actionWar() { if(confirm("開戦？")) { myData.warTarget=selectedTarget; saveMe(); } }
+ function startExpansion() {
+    expansionMode=true; document.getElementById('mapMsg').innerText="領土描画中"; document.getElementById('mapMsg').style.display="block"; document.getElementById('cancelOverlay').style.display="block";
+    if(drawControl) map.removeControl(drawControl);
+    drawControl = new L.Control.Draw({ draw: { polygon: true, rectangle:true, circle:false, marker:false, polyline:false } });
+    map.addControl(drawControl);
+    map.once(L.Draw.Event.CREATED, e => {
+       const g = e.layer.toGeoJSON();
+       const cost = (myData.area||0)*50 + 1000;
+       if(myData.money >= cost) {
+         myData.geometries.push(g); myData.money-=cost;
+         let ta=0; myData.geometries.forEach(x=>ta+=Math.round(turf.area(x)/1000000)); myData.area=ta;
+         saveMe(); alert("拡張成功");
+       }
+       cancelActionMode();
+    });
+ }
+ function cancelActionMode() { expansionMode=false; transferMode=false; document.getElementById('mapMsg').style.display="none"; document.getElementById('cancelOverlay').style.display="none"; if(drawControl) map.removeControl(drawControl); }
 
+ // --- Auth ---
+ function register() {
+   const n=document.getElementById('regName').value, p=document.getElementById('regPass').value, c=document.getElementById('regCurrency').value||"$";
+   worldNode.get(n).put({pass:p, money:20000, gdp:1000, military:500, happiness:100, area:0, currency:c, geometries:"[]", resources:'{"oil":0}'});
+   alert("完了"); showScreen('Login');
+ }
+ function login() {
+   const n=document.getElementById('loginName').value, p=document.getElementById('loginPass').value;
+   worldNode.get(n).once(d=>{
+     if(!d || d.pass!==p) return alert("失敗");
+     myName=n; localStorage.setItem('autoName',n); localStorage.setItem('autoPass',p);
+     document.getElementById('overlayStart').classList.add('hidden'); document.getElementById('gameUI').classList.remove('hidden');
+     initMap(); startGunSync(); setInterval(ecoTick, 10000);
+   });
+ }
+ function doLogout() { localStorage.clear(); location.reload(); }
+ function startSpectator() { isSpectator=true; document.getElementById('overlayStart').classList.add('hidden'); document.getElementById('gameUI').classList.remove('hidden'); document.getElementById('playerControls').classList.add('hidden'); document.getElementById('spectatorMsg').classList.remove('hidden'); initMap(); startGunSync(); }
+
+ function selectTarget(n) { selectedTarget=n; document.getElementById('targetName').innerText=n; document.querySelectorAll('#tab-war button').forEach(b=>b.disabled=false); }
  function refreshUI() {
-   document.getElementById('valMoney').innerText = Math.floor(myData.money || 0).toLocaleString();
-   document.getElementById('valArea').innerText = (myData.area || 0).toLocaleString();
-   document.getElementById('valMilGrid').innerText = (myData.military || 0).toLocaleString();
-   document.getElementById('valPop').innerText = Math.floor(myData.population || 0).toLocaleString();
+   document.getElementById('valMoney').innerText = Math.floor(myData.money||0).toLocaleString();
+   document.getElementById('valMilGrid').innerText = (myData.military||0).toLocaleString();
+   document.getElementById('valArea').innerText = (myData.area||0).toLocaleString();
+   document.getElementById('valPop').innerText = Math.floor((myData.area||0)*100).toLocaleString();
+   document.getElementById('valHappy').innerText = myData.happiness||100;
+   document.getElementById('valOil').innerText = myData.resources.oil||0;
+   document.getElementById('valGDP').innerText = (myData.gdp||0).toLocaleString();
+   document.getElementById('valUpkeep').innerText = "-"+((myData.military||0)*2).toLocaleString();
    document.getElementById('uiName').innerText = myName;
+   document.getElementById('uiCurrency').innerText = myData.currency||"$";
+ }
+ function updateRanking() {
+   const r = Object.keys(allNations).map(k=>({name:k, score:(allNations[k].money||0)+(allNations[k].military||0)*2})).sort((a,b)=>b.score-a.score);
+   let h = "<h3>世界ランク</h3>"; r.slice(0,10).forEach((x,i)=>h+=`<div>${i+1}. ${x.name} (${x.score.toLocaleString()})</div>`);
+   document.getElementById('rankingList').innerHTML = h;
+ }
+ // --- Admin ---
+ window.onkeydown = e => { if(e.shiftKey && e.altKey) document.getElementById('overlayAdminAuth').classList.remove('hidden'); };
+ function attemptAdminLogin() { if(document.getElementById('adminKey').value === "201305042020302") { document.getElementById('adminPanel').classList.remove('hidden'); refreshAdminList(); } }
+ function closeAdmin() { document.getElementById('adminPanel').classList.add('hidden'); }
+ function refreshAdminList() {
+   let h = ""; Object.keys(allNations).forEach(k=>{ const n=allNations[k]; h+=`<tr><td>${k}</td><td>${n.money}</td><td>${n.happiness}</td><td>${n.area}</td><td>${n.gdp}</td><td><button onclick="worldNode.get('${k}').put(null)">消</button></td></tr>`; });
+   document.getElementById('adminTableBody').innerHTML = h;
  }
 
- window.onload = () => {
-   const n = localStorage.getItem('autoName'), p = localStorage.getItem('autoPass');
-   if(n && p) { document.getElementById('loginName').value=n; document.getElementById('loginPass').value=p; login(); }
- };
+ // --- Flag ---
+ let flagCtx;
+ function initFlagEditor() {
+   const c=document.getElementById('flagCanvas'); flagCtx=c.getContext('2d');
+   if(myData.flag) { let i=new Image(); i.onload=()=>flagCtx.drawImage(i,0,0); i.src=myData.flag; }
+   const p=document.getElementById('paletteBox'); p.innerHTML="";
+   ['#f00','#0f0','#00f','#fff','#000'].forEach(col=>{ let d=document.createElement('div'); d.className='color-dot'; d.style.background=col; d.onclick=()=>flagCtx.fillStyle=col; p.appendChild(d); });
+   c.onmousedown=e=>{ let r=c.getBoundingClientRect(); flagCtx.fillRect(e.clientX-r.left, e.clientY-r.top, 10, 10); };
+ }
+ function saveFlag() { myData.flag = document.getElementById('flagCanvas').toDataURL(); saveMe(); alert("国旗保存"); }
+
+ window.onload = () => { const n=localStorage.getItem('autoName'), p=localStorage.getItem('autoPass'); if(n && p) { document.getElementById('loginName').value=n; document.getElementById('loginPass').value=p; login(); } };
 </script>
 </body>
 </html>
