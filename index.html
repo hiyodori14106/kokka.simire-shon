@@ -3,7 +3,7 @@
 <head>
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <title>Global Strategy: Absolute Final Online</title>
+ <title>Global Strategy: Online Fixed V15</title>
   
  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Noto+Sans+JP:wght@300;400;700&display=swap" rel="stylesheet">
  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
@@ -18,10 +18,9 @@
  body { font-family: 'Noto Sans JP', sans-serif; background-color: var(--bg-color); color: #e0e6ed; margin: 0; padding: 0; height: 100vh; overflow: hidden; }
  .app-container { display: flex; height: 100%; }
  .map-section { flex: 1; position: relative; }
- #gameMap { width: 100%; height: 100%; background: #0b0b0b; }
+ #gameMap { width: 100%; height: 100%; background: #000; }
  .sidebar { width: 360px; min-width: 300px; background: var(--panel-bg); border-left: 1px solid #333; display: flex; flex-direction: column; padding: 15px; box-shadow: -5px 0 20px rgba(0,0,0,0.8); z-index: 100; overflow-y: auto; }
- h1 { color: var(--neon-blue); text-align: center; font-family: 'Orbitron'; font-size: 1.4em; border-bottom: 2px solid var(--neon-blue); padding-bottom: 10px; margin-top: 0; }
- h3 { color: var(--neon-gold); font-size: 0.9em; margin-top: 15px; border-left: 3px solid var(--neon-gold); padding-left: 8px; font-family: 'Orbitron'; }
+ h1 { color: var(--neon-blue); text-align: center; font-family: 'Orbitron'; font-size: 1.4em; border-bottom: 2px solid var(--neon-blue); padding-bottom: 10px; margin: 0 0 15px 0; }
  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 15px; }
  .stat-card { background: #1a1a1a; padding: 8px; border-radius: 4px; text-align: center; border: 1px solid #333; }
  .stat-val { font-family: 'Orbitron'; font-size: 1.1em; color: white; display: block; }
@@ -31,17 +30,14 @@
  .btn-main { background: var(--neon-blue); color: black; }
  .btn-war { background: var(--neon-red); color: white; }
  .btn-buy { background: var(--neon-green); color: black; }
- .btn-eco { background: var(--neon-purple); color: white; }
- .btn-trade { background: var(--neon-gold); color: black; }
  .btn-sub { background: #333; color: #ccc; }
  input { background: #222; border: 1px solid #555; color: white; padding: 10px; width: 100%; box-sizing: border-box; margin-bottom: 10px; }
  .tabs { display: flex; gap: 2px; margin-bottom: 10px; }
  .tab { flex: 1; padding: 8px; background: #222; color: #888; text-align: center; cursor: pointer; font-size: 0.7em; }
  .tab.active { background: #333; color: var(--neon-blue); border-bottom: 2px solid var(--neon-blue); }
  .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; display: flex; justify-content: center; align-items: center; }
- .modal { background: #111; border: 1px solid var(--neon-blue); padding: 30px; width: 400px; max-width: 90%; text-align: center; border-radius: 8px; box-shadow: 0 0 20px var(--neon-blue); }
+ .modal { background: #111; border: 1px solid var(--neon-blue); padding: 30px; width: 400px; max-width: 90%; text-align: center; border-radius: 8px; }
  .hidden { display: none !important; }
- #adminPanel { position: fixed; top: 5%; left: 5%; width: 90%; height: 90%; background: #000; border: 2px solid var(--neon-red); z-index: 10000; padding: 20px; overflow-y: auto; color: var(--neon-red); }
  #flagCanvas { border: 2px solid #555; background: #fff; cursor: crosshair; image-rendering: pixelated; margin: 10px auto; display: block; touch-action: none; }
  .palette { display: flex; justify-content: center; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
  .color-dot { width: 24px; height: 24px; border-radius: 4px; border: 1px solid #fff; cursor: pointer; }
@@ -61,7 +57,6 @@
  <h2>新規建国</h2> 
  <input type="text" id="regName" placeholder="国名"> 
  <input type="password" id="regPass" placeholder="パスワード"> 
- <input type="text" id="regCurrency" placeholder="通貨単位"> 
  <button id="btnRegSubmit" class="btn-main" onclick="register()">国家を作成</button> 
  <button class="btn-sub" onclick="showScreen('Main')">戻る</button> 
  </div>
@@ -74,82 +69,54 @@
  </div>
 </div>
 
-<div id="overlayAdminAuth" class="overlay hidden"> 
- <div class="modal" style="border-color:red;"> 
- <h2>管理者認証</h2> 
- <input type="password" id="adminKey" placeholder="Password"> 
- <button class="btn-war" onclick="attemptAdminLogin()">UNLOCK</button> 
- </div> 
-</div>
-
-<div id="adminPanel" class="hidden"> 
- <h2>⚠️ 管理コンソール</h2> 
- <button class="btn-sub" onclick="closeAdmin()">閉じる</button> 
- <div id="adminList"></div>
-</div>
-
 <div id="gameUI" class="app-container hidden"> 
  <div class="map-section"> 
  <div id="gameMap"></div> 
- <div id="mapMsg" style="position:absolute; top:20px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.9); padding:15px; border:2px solid var(--neon-gold); color:var(--neon-gold); display:none; z-index:1000; pointer-events:none;"></div> 
+ <div id="mapMsg" style="position:absolute; top:20px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.9); padding:15px; border:2px solid var(--neon-gold); color:var(--neon-gold); display:none; z-index:1000; pointer-events:none; text-align:center;"></div> 
  </div>
  <div class="sidebar">  
  <h1><span id="uiName">NATION</span></h1>  
  <div class="stats-grid">
-  <div class="stat-card"><span class="stat-label">資金</span><span class="stat-val" id="valMoney">0</span><span id="uiCurrency">$</span></div>
+  <div class="stat-card"><span class="stat-label">資金</span><span class="stat-val" id="valMoney">0</span></div>
   <div class="stat-card"><span class="stat-label">軍事力</span><span class="stat-val" id="valMilGrid" style="color:var(--neon-red);">0</span></div>
   <div class="stat-card"><span class="stat-label">面積</span><span class="stat-val" id="valArea">0</span><span>km²</span></div>
   <div class="stat-card"><span class="stat-label">幸福度</span><span class="stat-val" id="valHappy" style="color:var(--neon-green);">100</span><span>%</span></div>
  </div>
  <div class="tabs"> 
    <div class="tab active" onclick="setTab('main', event)">内政</div> 
-   <div class="tab" onclick="setTab('war', event)">軍事・外交</div> 
-   <div class="tab" onclick="setTab('rank', event)">順位</div> 
+   <div class="tab" onclick="setTab('war', event)">軍事</div> 
    <div class="tab" onclick="setTab('flag', event)">国旗</div> 
  </div>
   
  <div id="playerControls">
   <div id="tab-main"> 
-    <h3>経済・開発</h3> 
-    <div style="font-size:0.8em; color:#ccc; margin-bottom:5px;">GDP: <b id="valGDP">0</b> / 維持費: <span id="valUpkeep" style="color:var(--neon-red)">0</span></div>
     <button class="btn-main" onclick="invest()">🏭 産業投資 (-2000)</button> 
-    <button class="btn-eco" onclick="sellResources()">💰 資源売却</button>
-    <button class="btn-war" onclick="printMoney()">💸 通貨発行 (+10k/幸↓)</button>
-    <div style="margin-top:10px; font-size:0.8em;">所得税率: <span id="taxVal">10</span>% <input type="range" id="taxRate" min="0" max="80" value="10" oninput="document.getElementById('taxVal').innerText=this.value"></div> 
     <button class="btn-buy" onclick="startExpansion()">🗺️ 領土購入・描画</button> 
-    <button class="btn-sub" onclick="manualSave()">💾 手動保存</button> 
     <button class="btn-sub" onclick="doLogout()">🚪 ログアウト</button> 
   </div>
   <div id="tab-war" class="hidden"> 
-    <button class="btn-war" onclick="recruit()">⚔️ 通常雇用 (-$1k)</button> 
-    <button class="btn-eco" onclick="draftSoldiers()">📢 強制徴兵</button>
+    <button class="btn-war" onclick="recruit()">⚔️ 通常雇用 (-1000)</button> 
     <h3>対象: <b id="targetName">未選択</b></h3> 
-    <div style="display:flex; gap:5px;">
-      <button class="btn-trade" id="btnSendMoney" onclick="sendMoney()" disabled>💸 送金</button>
-      <button class="btn-sub" id="btnDM" onclick="sendDM()" disabled>📩 密書</button>
-    </div>
     <button class="btn-war" id="btnWar" onclick="actionWar()" disabled>💣 宣戦布告</button> 
   </div>
   <div id="tab-flag" class="hidden">
     <canvas id="flagCanvas" width="100" height="60"></canvas>
     <div class="palette" id="paletteBox"></div>
     <button class="btn-main" onclick="saveFlag()">💾 国旗保存</button>
-    <button class="btn-sub" onclick="clearFlagCanvas()">🗑️ クリア</button>
   </div>
-  <div id="tab-rank" class="hidden"><div id="rankingList"></div></div>
  </div>
- <div id="cancelOverlay" style="position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:2000; display:none;"><button class="btn-war" style="width:200px;box-shadow:0 0 10px red;" onclick="cancelActionMode()">❌ 中止</button></div>
+ <div id="cancelOverlay" style="position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:2000; display:none;"><button class="btn-war" style="width:200px; box-shadow:0 0 15px red;" onclick="cancelActionMode()">❌ 描画を中止</button></div>
  </div>
 </div>
 
-<div id="debugLog">Initializing System...</div>
+<div id="debugLog">System Initialized.</div>
 
 <script>
- // --- Config ---
+ // --- Gun.js ---
  const gun = Gun(['https://gun-manhattan.herokuapp.com/gun', 'https://peer.wall.org/gun']);
- const worldNode = gun.get('global-strategy-v12').get('nations');
+ const worldNode = gun.get('global-strategy-v15').get('nations');
 
- // --- State ---
+ // --- Globals ---
  let myName = "", myData = {geometries:[]}, map, drawnItems, drawControl, selectedTarget = null;
  let allNations = {}, isSpectator = false, expansionMode = false;
 
@@ -163,39 +130,29 @@
    document.getElementById('tab-'+id).classList.remove('hidden');
    document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
    if(e) e.target.classList.add('active');
-   if(id === 'rank') updateRanking();
    if(id === 'flag') initFlagEditor();
  }
 
- // --- Realtime Sync ---
+ // --- Sync ---
  function startGunSync() {
    worldNode.map().on((data, key) => {
      if(!data) { delete allNations[key]; return; }
      let n = {...data};
      try {
-       n.geometries = typeof data.geometries === 'string' ? JSON.parse(data.geometries) : [];
+       n.geometries = (typeof data.geometries === 'string') ? JSON.parse(data.geometries) : [];
      } catch(e) { n.geometries = []; }
      allNations[key] = n;
      
      if(key === myName) {
-       if(!expansionMode) {
-         myData = n;
-         if(myData.secretMsg) {
-           try {
-             const s = JSON.parse(myData.secretMsg);
-             alert(`📩 密書 from ${s.from}:\n${s.msg}`);
-             worldNode.get(myName).put({secretMsg: null});
-           } catch(e){}
-         }
-         refreshUI();
-       }
+       myData = n;
+       refreshUI();
      }
      renderWorld();
    });
  }
 
  function saveMe() {
-   if(isSpectator || !myName) return;
+   if(!myName || isSpectator) return;
    const d = {...myData};
    d.geometries = JSON.stringify(myData.geometries || []);
    worldNode.get(myName).put(d);
@@ -209,13 +166,12 @@
    drawnItems = new L.FeatureGroup(); 
    map.addLayer(drawnItems);
    
-   // 描画イベントの登録（一度だけ）
+   // 重要: 領土描画完了イベント
    map.on(L.Draw.Event.CREATED, e => {
       if(!expansionMode) return;
-      const layer = e.layer;
-      const g = layer.toGeoJSON();
+      const g = e.layer.toGeoJSON();
       const areaVal = Math.round(turf.area(g) / 1000000);
-      const cost = (myData.area || 0) * 20 + 1000;
+      const cost = (myData.area || 0) * 10 + 1000;
       
       if(myData.money >= cost) {
          if(!myData.geometries) myData.geometries = [];
@@ -225,9 +181,9 @@
          myData.geometries.forEach(x => ta += Math.round(turf.area(x)/1000000));
          myData.area = ta;
          saveMe();
-         alert(`領土拡大成功: ${areaVal}km²を獲得`);
+         alert(`領土を獲得しました: ${areaVal}km²`);
       } else {
-         alert("資金が不足しています。");
+         alert("資金が足りません！");
       }
       cancelActionMode();
    });
@@ -235,10 +191,10 @@
    map.on('popupopen', e => {
      const b = document.createElement('div'); b.innerHTML = e.popup.getContent();
      const name = b.querySelector('b') ? b.querySelector('b').innerText : null;
-     if(name && name !== myName && !isSpectator) {
+     if(name && name !== myName) {
         selectedTarget = name;
         document.getElementById('targetName').innerText = name;
-        document.querySelectorAll('#tab-war button').forEach(el => el.disabled = false);
+        document.getElementById('btnWar').disabled = false;
      }
    });
  }
@@ -250,11 +206,12 @@
      const n = allNations[key];
      if(!n.geometries || n.geometries.length === 0) return;
      
+     // 領土の青色判定: key が myName と一致するか
      const isMe = (key === myName);
      const isWar = (myData.warTarget === key);
-     let color = isMe ? "#00f3ff" : (isWar ? "#ff8800" : "#ff0055");
+     const color = isMe ? "#00f3ff" : (isWar ? "#ff8800" : "#ff0055");
      
-     const flag = n.flag ? `<img src="${n.flag}" style="width:60px;display:block;margin:5px auto;border:1px solid #555;">` : "";
+     const flag = n.flag ? `<img src="${n.flag}" style="width:50px;display:block;margin:5px auto;border:1px solid #555;">` : "";
      
      n.geometries.forEach(geo => {
        L.geoJSON(geo, { style: { color: color, weight: isMe ? 4 : 2, fillOpacity: 0.4 } })
@@ -269,33 +226,28 @@
    const n = document.getElementById('regName').value.trim();
    const p = document.getElementById('regPass').value;
    if(!n || !p) return alert("情報を入力してください");
-   const btn = document.getElementById('btnRegSubmit');
-   btn.disabled = true;
    
-   // 高速書き込み
    worldNode.get(n).put({
      pass: p, money: 30000, gdp: 1200, military: 500, happiness: 100, area: 0, geometries: "[]"
    });
 
    setTimeout(() => {
-     alert("建国完了。ログインしてください。");
+     alert("登録しました。ログインしてください。");
      showScreen('Login');
-     btn.disabled = false;
-   }, 600);
+   }, 500);
  }
 
  function login() {
    const n = document.getElementById('loginName').value.trim();
    const p = document.getElementById('loginPass').value;
    worldNode.get(n).once(d => {
-     if(!d || d.pass !== p) return alert("ログイン失敗");
+     if(!d || d.pass !== p) return alert("ログイン情報が正しくありません");
      myName = n; 
      localStorage.setItem('autoName', n); localStorage.setItem('autoPass', p);
      document.getElementById('overlayStart').classList.add('hidden');
      document.getElementById('gameUI').classList.remove('hidden');
      initMap(); 
-     // 地図の表示崩れを直す
-     setTimeout(() => map.invalidateSize(), 200);
+     setTimeout(() => map.invalidateSize(), 300); // 表示崩れ防止
      startGunSync(); 
      setInterval(ecoTick, 10000);
    });
@@ -305,15 +257,14 @@
     if(isSpectator) return;
     expansionMode = true; 
     document.getElementById('mapMsg').style.display = "block"; 
-    document.getElementById('mapMsg').innerHTML = "<b>領土描画中...</b><br>地図上の多角形アイコン、または四角形アイコンを使用して領土を囲ってください。"; 
+    document.getElementById('mapMsg').innerHTML = "<b>領土描画モード</b><br>地図上のツールを使用して、領土を囲んでください。"; 
     document.getElementById('cancelOverlay').style.display = "block";
     
     if(drawControl) map.removeControl(drawControl);
     drawControl = new L.Control.Draw({
-       draw: { polygon: true, rectangle: true, circle: false, marker: false, polyline: false, circlemarker: false }
+       draw: { polygon: true, rectangle: true, circle: false, marker: false, polyline: false }
     });
     map.addControl(drawControl);
-    log("Drawing mode activated.");
  }
 
  function cancelActionMode() {
@@ -325,19 +276,13 @@
 
  function invest() { myData.money -= 2000; myData.gdp = (myData.gdp||0) + 500; saveMe(); }
  function recruit() { if(myData.money>=1000){ myData.money-=1000; myData.military=(myData.military||0)+300; saveMe(); } }
- function draftSoldiers() { myData.military += 1000; myData.happiness -= 20; saveMe(); }
- function sellResources() { let e = (myData.area||0)*10; myData.money += e; saveMe(); alert(`資源売却: +${e}`); }
- function printMoney() { myData.money += 10000; myData.happiness -= 15; saveMe(); }
- function actionWar() { if(confirm("開戦しますか？")) { myData.warTarget = selectedTarget; saveMe(); } }
- function sendDM() { let m = prompt("密書:"); if(m) worldNode.get(selectedTarget).put({secretMsg: JSON.stringify({from:myName, msg:m})}); }
+ function actionWar() { myData.warTarget = selectedTarget; saveMe(); alert("開戦しました！"); }
  function doLogout() { localStorage.clear(); location.reload(); }
- function startSpectator() { isSpectator = true; document.getElementById('overlayStart').classList.add('hidden'); document.getElementById('gameUI').classList.remove('hidden'); document.getElementById('playerControls').classList.add('hidden'); initMap(); setTimeout(()=>map.invalidateSize(),200); startGunSync(); }
+ function startSpectator() { isSpectator = true; document.getElementById('overlayStart').classList.add('hidden'); document.getElementById('gameUI').classList.remove('hidden'); document.getElementById('playerControls').classList.add('hidden'); initMap(); setTimeout(()=>map.invalidateSize(),300); startGunSync(); }
 
  function ecoTick() {
    if(isSpectator) return;
-   const upkeep = (myData.military || 0) * 2;
-   const tax = parseInt(document.getElementById('taxRate').value);
-   myData.money = (myData.money || 0) + (myData.gdp || 0) * (tax/100) - upkeep;
+   myData.money = (myData.money || 0) + (myData.gdp || 0) * 0.1 - (myData.military || 0);
    saveMe();
  }
 
@@ -345,18 +290,8 @@
    document.getElementById('valMoney').innerText = Math.floor(myData.money||0).toLocaleString();
    document.getElementById('valMilGrid').innerText = (myData.military||0).toLocaleString();
    document.getElementById('valArea').innerText = (myData.area||0).toLocaleString();
-   document.getElementById('valPop').innerText = Math.floor((myData.area||0)*100+5000).toLocaleString();
    document.getElementById('valHappy').innerText = myData.happiness||100;
-   document.getElementById('valGDP').innerText = (myData.gdp||0).toLocaleString();
-   document.getElementById('valUpkeep').innerText = "-"+((myData.military||0)*2).toLocaleString();
    document.getElementById('uiName').innerText = myName;
- }
-
- function updateRanking() {
-   const r = Object.keys(allNations).map(k=>({name:k, score:(allNations[k].money||0)})).sort((a,b)=>b.score-a.score);
-   let h = "<h3>ランキング</h3>"; 
-   r.slice(0,10).forEach((x,i)=>h+=`<div class="stat-card" style="margin-bottom:2px;text-align:left;">${i+1}. ${x.name} <span style="float:right">${Math.floor(x.score/1000)}k</span></div>`);
-   document.getElementById('rankingList').innerHTML = h;
  }
 
  // --- Improved Flag Editor ---
@@ -378,18 +313,7 @@
    };
    c.onmousedown=(e)=>{ isDrawing=true; draw(e); }; c.onmousemove=draw; window.onmouseup=()=>isDrawing=false;
  }
- function clearFlagCanvas() { flagCtx.fillStyle="#fff"; flagCtx.fillRect(0,0,100,60); }
- function saveFlag() { myData.flag = document.getElementById('flagCanvas').toDataURL(); saveMe(); alert("国旗保存完了"); }
-
- // --- Admin ---
- window.onkeydown = e => { if(e.shiftKey && e.altKey) document.getElementById('overlayAdminAuth').classList.remove('hidden'); };
- function attemptAdminLogin() { if(document.getElementById('adminKey').value === "201305042020302") { document.getElementById('adminPanel').classList.remove('hidden'); refreshAdminList(); } }
- function closeAdmin() { document.getElementById('adminPanel').classList.add('hidden'); }
- function refreshAdminList() {
-   let h = ""; Object.keys(allNations).forEach(k=>{ h+=`<div>${k} <button onclick="worldNode.get('${k}').put(null);location.reload();">消去</button></div>`; });
-   document.getElementById('adminList').innerHTML = h;
- }
- function manualSave() { saveMe(); alert("保存完了"); }
+ function saveFlag() { myData.flag = document.getElementById('flagCanvas').toDataURL(); saveMe(); alert("国旗を保存しました"); }
 
  window.onload = () => { 
    const n = localStorage.getItem('autoName'), p = localStorage.getItem('autoPass'); 
@@ -397,4 +321,4 @@
  };
 </script>
 </body>
-</html
+</html>
